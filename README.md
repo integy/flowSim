@@ -1,62 +1,60 @@
-# flowSim
+# flowSim — true 3D fluid laboratory
 
-An interactive browser-based fluid tunnel for exploring flow around obstacles in **air, water and oil**.
+An original browser-based **three-dimensional** incompressible flow playground for air, water and illustrative light oil. Three.js presents a perspective tunnel, orbit/pan/zoom camera, 3D tracers and selectable XY/XZ/YZ velocity slices.
 
-**Website: https://integy.github.io/flowSim/**
+Website: https://integy.github.io/flowSim/ (deployment is separate from local development).
 
-Conceptually inspired by [GENAir](https://alphalch.github.io/GENAir/). This is an independently written implementation, not a copy of GENAir's code, and is not affiliated with its author.
+## Features
 
-## Explore
-
-- Switch between air, fresh water and illustrative light oil with different density and viscosity presets.
-- Change inlet speed, characteristic length and obstacle size.
-- Compare circular, square, diamond and foil-shaped obstacles, or an empty channel.
-- Display velocity, vorticity or passive dye, with optional tracer particles.
-- Drag in the flow field to stir; pause, advance one step or reset.
-- Export the canvas as PNG and download settings as JSON. Settings are remembered locally when browser storage is available.
-- Responsive desktop and mobile controls; no account, server or CDN dependencies.
+- A real **40 × 24 × 24 face-staggered velocity grid**, with three velocity components and a cell pressure field. Semi-Lagrangian advection, stable bounded explicit diffusion and iterative pressure projection evolve the field. Particles follow sampled computed velocity, not scripted stream paths.
+- Upload **binary or ASCII STL** files locally. Geometry is centered and normalized; scale and X/Y/Z rotation controls update both the rendered triangle mesh and solver's solid mask.
+- Actual triangle-ray intersections and parity determine solid voxels; this is **not a bounding-box obstacle approximation**. Upload status reports triangle count, non-manifold/open edge warnings and solid voxel count. Mesh display is smooth, while its fluid boundary is voxelized.
+- Built-in sphere, box and empty tunnel. Medium/speed/geometry changes reset the field. Pause, step, reset flow and reset camera.
+- No runtime CDN, server API or node_modules dependency. The committed `app.bundle.js` includes Three.js and OrbitControls; all URLs are relative for `/flowSim/` GitHub Pages hosting.
 
 ## Model and limitations
 
-This is a **2D educational, single-phase incompressible flow simulation**, not a validated engineering CFD package or a 3D LES solver. It uses a numerical grid, semi-Lagrangian advection, implicit viscous diffusion and iterative pressure projection, with solid obstacle boundaries. Dye and tracer particles visualize the computed velocity field.
+This is **educational normalized single-phase flow**, not validated engineering CFD, LES or a prediction of real turbulence/forces. There is no lift, drag or engineering pressure-load calculation. Approximate impermeable free-slip obstacle boundaries, voxel stair steps, fixed axial inlet/outlet, side walls and 28 Jacobi pressure iterations introduce error; the live RMS divergence exposes projection residual. Coarse resolution, bounded velocities and numerical diffusion prioritize browser stability, not physical accuracy. The simulation clock is normalized and runs with computational steps, not real elapsed physical time. CPU speed affects playback rate.
 
-Water means **fully submerged flow**: there is no free surface, wave generation, splashing, buoyancy or air–water interface. Oil properties are illustrative; temperature is not simulated. Foil shapes do not imply validated aerodynamic predictions.
+**Water is fully submerged. There is no water surface**, waves, splashing, buoyancy, gravity, compressibility, cavitation or multiphase interface. Oil is a constant-property illustrative light oil; temperature is not simulated.
 
-The displayed physical Reynolds number is computed as `Re = density × inlet speed × characteristic length / dynamic viscosity`. Representative air/water properties are near 20 °C. To keep the simulation interactive on a small browser grid, inlet speed and kinematic viscosity are deliberately mapped into normalized solver units, including logarithmic viscosity compression. Therefore the displayed SI Reynolds number is contextual, **not the solver's effective Reynolds number**. Density is used for physical metrics, not multiphase dynamics. No quantitative lift/drag or engineering accuracy is claimed.
+SI metrics use representative properties near 20 °C and `Re = ρUL/μ`. Reference length L changes this metric only. Density does not create buoyancy. The display solver uses `inlet = 0.35 + 0.16U` and `ν_display = 0.000035 + 0.00032 log10(1 + ν_SI / 10⁻⁶)`; viscosity ordering is retained but **Reynolds similarity is not**. These are not SI solver speeds or viscosities.
 
-## Run locally
+STL limits: **12 MiB and 60,000 triangles**. Binary size must match its declared triangle count. Coordinates must be finite and have nonzero extent. Open/non-manifold edge detection uses rounded welded positions; warnings are not a proof of watertightness. Closed, non-self-intersecting manifold meshes work best. Scanline parity handles triangle surfaces and shared-hit deduplication, but self-intersections, nested overlapping shells and unresolved features can yield invalid interiors. Details thinner than a voxel can disappear. Uploads never leave the browser. Large meshes may briefly block the UI while voxelizing.
+
+## Run and build
 
 ```sh
+# The already-committed bundle works without installing anything:
 python3 -m http.server 8080
+# Open http://localhost:8080/
+
+# After changing JS source:
+npm ci
+npm run build
 ```
 
-Open http://localhost:8080/. Use an HTTP server rather than opening the file directly, because the JavaScript uses ES modules.
+Commit the rebuilt `app.bundle.js` alongside source changes. GitHub Pages can serve the repository root as static files; no deployment build is required. Do not open via file://.
 
-## Tests
-
-Node.js is required only for development tests, not for serving the website.
+## Verification
 
 ```sh
-npm ci
 npm test
-npx playwright install chromium
 npm run test:browser
 ```
 
-Numerical tests check finite bounded flow for all medium/obstacle combinations, solid boundaries, pressure-projection divergence reduction, viscosity damping, dye transport and physical metric calculations. Browser tests exercise desktop/mobile controls, settings persistence, exports, pointer stirring and operation with blocked local storage. These are implementation checks, not experimental validation of CFD accuracy.
+Playwright configuration uses local Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`; adapt `playwright.config.js` for another OS. Numerical tests cover 3D stability, projection reduction, impermeable face constraints, all medium mappings, actual binary/ASCII STL parsing and a tetrahedral voxel volume smaller than its bounding box. Browser tests exercise real WebGL rendering, actual file upload, voxel-changing rotations, all three media, slice orientations, camera orbit, playback controls and a 390px mobile layout. Screenshots are written under ignored `test-results/`. Tests are implementation checks, not experimental CFD validation.
 
-## Files
+## Source
 
-- `index.html`, `style.css`: interface and responsive layout.
-- `app.js`: rendering, interaction, exports and persistence.
-- `solver.js`: numerical flow solver.
-- `physics.js`: media properties, SI metrics and normalized parameter mapping.
-- `tests/`: numerical and browser tests.
-
-## Deployment
-
-GitHub Pages serves the `main` branch root. There is no build step; pushing website changes to `main` publishes them after the Pages deployment finishes.
+- `fluid3d.js`: three-component MAC velocity solver.
+- `stl.js`: bounded STL reader, normalization/rotation, edge checks and triangle-parity voxelizer.
+- `app.js`: Three.js scene, 3D particle advection, slices and UI.
+- `app.bundle.js`: self-contained production module, generated by esbuild.
+- `physics.js`: SI properties and explicit normalized mappings.
+- `index.html`, `style.css`: responsive interface and limitations.
+- `tests/`: numerical and browser regression tests. `solver.js` and its existing 2D regression tests are retained as legacy references only; the website imports exclusively `fluid3d.js`.
 
 ## Rights
 
-No license has been selected for this repository. GENAir is referenced as conceptual inspiration only; its source code and assets are not redistributed here.
+Independently written implementation; no GENAir code or assets copied. Conceptual inspiration: [GENAir](https://alphalch.github.io/GENAir/) (not affiliated). Three.js is MIT-licensed; its license is retained in the generated bundle's legal comment and in `THIRD_PARTY_NOTICES.txt`. No license has been selected for this application's original source.

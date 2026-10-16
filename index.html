@@ -1,35 +1,245 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#0b1015"><meta name="description" content="An interactive fluid dynamics playground. Explore air, water and oil in a real-time 2D virtual flow tunnel.">
-<title>flowSim — A fluid dynamics playground</title>
-<link rel="icon" href="./favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="./style.css">
-</head>
-<body>
-<header class="masthead"><a class="brand" href="./" aria-label="flowSim home"><svg viewBox="0 0 40 32" aria-hidden="true"><path d="M2 6h14c8 0 8 20 16 20h6M2 16h9c10 0 10-10 20-10h7M2 26h10c8 0 8-10 16-10h10"/></svg><span>flow<span class="thin">Sim</span><span class="beta">LAB</span></span></a><div class="header-meta"><span class="dot"></span> BROWSER-BASED · NO INSTALL</div><a href="#model" class="quiet-link">About the model ↗</a></header>
-<main>
-<section class="intro"><div><p class="eyebrow">THE FLUID DYNAMICS PLAYGROUND</p><h1>See the invisible<span>.</span></h1><p class="lede">One tunnel. Three fluids. A thousand ways to explore flow.</p></div><p class="intro-note">Change the medium. Shape the current.<br>Discover what happens downstream.</p></section>
-<div class="workspace">
-<aside class="controls panel" aria-label="Experiment controls">
-<div class="panel-heading"><span>Experiment setup</span><span class="section-index">01 — 03</span></div>
-<section class="control-section"><h2><span>01</span> Choose your medium</h2><div class="segmented media" aria-label="Fluid medium"><button data-medium="air" aria-pressed="true">Air</button><button data-medium="water" aria-pressed="false">Water</button><button data-medium="oil" aria-pressed="false">Oil</button></div><p id="medium-note" class="hint">Dry air · 20 °C</p><dl class="properties"><div><dt>Density <span>ρ</span></dt><dd><span id="density">1.204</span> <small>kg/m³</small></dd></div><div><dt>Dynamic viscosity <span>μ</span></dt><dd><span id="viscosity">1.81e−5</span> <small>Pa·s</small></dd></div></dl></section>
-<section class="control-section"><h2><span>02</span> Set the flow</h2><label class="range-label" for="speed">Inlet speed <output id="speed-value">2.0 m/s</output></label><input id="speed" aria-label="Inlet speed" type="range" min="0.2" max="8" step="0.1" value="2"><div class="range-ends"><span>0.2 m/s</span><span>8.0 m/s</span></div><label class="range-label" for="length">Characteristic length <output id="length-value">0.20 m</output></label><input id="length" aria-label="Characteristic length" type="range" min="0.02" max="1" step="0.01" value="0.2"><p class="hint">Reference L for the SI Reynolds number. Does not resize the normalized tunnel.</p></section>
-<section class="control-section"><h2><span>03</span> Shape the obstacle</h2><label class="sr-only" for="shape">Obstacle shape</label><select id="shape"><option value="circle">◯ &nbsp; Cylinder</option><option value="square">□ &nbsp; Square</option><option value="diamond">◇ &nbsp; Diamond</option><option value="foil">⌁ &nbsp; Symmetric foil</option><option value="none">— &nbsp; Empty tunnel</option></select><label class="range-label" for="size">Obstacle size <output id="size-value">24% H</output></label><input id="size" aria-label="Obstacle size" type="range" min="0.1" max="0.38" step="0.01" value="0.24"><p class="hint">Diameter / side / foil thickness scale, as a fraction of tunnel height H.</p></section>
-<div class="setup-footer"><span class="dot"></span><span id="storage-status">Settings saved on this device</span></div>
-</aside>
-<section class="simulation panel" aria-label="Flow visualization">
-<div class="simulation-top"><div class="tunnel-title"><span class="dot" id="run-dot"></span><strong id="medium-name">Air</strong><span class="subtle">/ 2D flow tunnel</span></div><span id="status" role="status">RUNNING</span></div>
-<div class="view-toolbar"><div class="segmented views" aria-label="Field visualization"><button data-view="dye" aria-pressed="true">Dye</button><button data-view="velocity" aria-pressed="false">Velocity</button><button data-view="vorticity" aria-pressed="false">Vorticity</button></div><label class="toggle"><input id="tracers" type="checkbox" checked aria-label="Show tracers"><span>Tracers</span></label></div>
-<div class="canvas-wrap"><div class="tunnel-label inlet">INFLOW →</div><div class="tunnel-label outlet">→ OUTFLOW</div><canvas id="flow" width="1120" height="504" aria-label="Simulated flow field. Drag to stir the fluid; use the Stir flow button for a keyboard alternative.">Your browser needs Canvas 2D support to display the simulation.</canvas><div class="canvas-caption"><span>↗ Drag to stir the fluid</span><span id="grid-label">160 × 72 CELLS</span></div></div>
-<div class="legend"><span id="legend-label">Dye concentration</span><div><span id="legend-min">0</span><i id="legend-gradient"></i><span id="legend-max">1</span></div></div>
-<div class="playback"><div class="playback-primary"><button id="pause" class="primary">Pause</button><button id="step" disabled>Step</button><button id="reset">Reset flow</button><button id="stir">Stir flow</button></div><span class="clock"><span id="sim-time">0.00</span> <small>sim s</small></span></div>
-<div class="metrics"><div><span class="metric-label">REYNOLDS NUMBER <span class="si">SI</span></span><strong id="reynolds">31,929</strong><small>Re = ρUL / μ</small></div><div><span class="metric-label">KINEMATIC VISCOSITY <span class="si">SI</span></span><strong id="kinematic">1.50e−5</strong><small>m²/s · ν = μ/ρ</small></div><div><span class="metric-label">PROJECTION RESIDUAL</span><strong id="divergence">—</strong><small>RMS ∇·u · normalized units</small></div></div>
-<div class="export-row"><span><span class="dot"></span> Computed flow, not a particle animation</span><div><button id="png" class="text-button">Export PNG ↗</button><button id="export" class="text-button">Export settings ↗</button></div></div>
-</section>
-</div>
-<section class="model-note" id="model"><div class="note-icon">i</div><div><h2>A playground, not a prediction.</h2><p>Real incompressible flow equations, an intentionally simplified world. SI properties inform the comparison; the visualization uses a normalized, viscosity-compressed model, <strong>not a physically matched Reynolds number.</strong> Water is a fully submerged, single-phase flow.</p><details><summary>How this model works</summary><div class="model-details"><section><h3>Inside the solver</h3><p>A staggered finite-difference grid evolves velocity with semi-Lagrangian advection, implicit viscous diffusion and iterative pressure projection. Passive dye and optional tracers follow that computed field. Dragging adds a local velocity impulse and dye; “Stir flow” provides a keyboard alternative.</p></section><section><h3>What the numbers mean</h3><p>Re and ν use the displayed SI density, viscosity, speed U and independent reference length L. Inlet speed maps to 0.35 + 0.16U normalized units; display viscosity is 0.000035 + 0.00032 log₁₀(1 + ν / 10⁻⁶). This logarithmic mapping preserves viscosity ordering, not physical similarity. The simulation clock is normalized, not real elapsed flow time.</p></section><section><h3>No free surface</h3><p>No waves, splashes, buoyancy, cavitation, compressibility or multiphase mixing. Walls and the grid-aligned obstacle are impermeable with approximate free-slip boundaries, not a resolved no-slip boundary layer. A coarse 2D grid and numerical diffusion cannot predict turbulence, drag or lift. Changing media or geometry restarts the flow. L only changes the reported SI metrics.</p></section></div></details></div></section>
-</main>
-<footer><span class="brand-small">flowSim <span>— follow your curiosity.</span></span><span>Original implementation · Concept inspired by <a href="https://alphalch.github.io/GENAir/" target="_blank" rel="noopener noreferrer">GENAir ↗</a> · Not affiliated</span></footer>
-<script type="module" src="./app.js"></script>
-</body></html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#080e17" />
+    <meta
+      name="description"
+      content="True 3D fluid simulation with STL obstacles, volumetric tracers and velocity slices."
+    />
+    <title>flowSim — 3D fluid laboratory</title>
+    <link rel="icon" href="./favicon.svg" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="./">≋ flow<span>Sim</span><b>3D LAB</b></a
+      ><span class="header-note">A VOLUMETRIC FLUID PLAYGROUND</span
+      ><a href="#model">About the model ↗</a>
+    </header>
+    <main>
+      <section class="intro">
+        <p class="eyebrow">COMPUTED IN THREE DIMENSIONS</p>
+        <h1>Give flow a new dimension<span>.</span></h1>
+        <p>Upload a shape. Orbit the current. Explore the invisible.</p>
+      </section>
+      <div class="workspace">
+        <aside class="panel controls" aria-label="Experiment controls">
+          <h2>Experiment setup <small>01 — 03</small></h2>
+          <section>
+            <h3><b>01</b> Choose your medium</h3>
+            <div class="segmented">
+              <button data-medium="air" aria-pressed="true">Air</button
+              ><button data-medium="water" aria-pressed="false">Water</button
+              ><button data-medium="oil" aria-pressed="false">Oil</button>
+            </div>
+            <p id="medium-note" class="hint"></p>
+            <dl>
+              <div>
+                <dt>Density ρ</dt>
+                <dd id="density"></dd>
+              </div>
+              <div>
+                <dt>Viscosity μ</dt>
+                <dd id="viscosity"></dd>
+              </div>
+            </dl>
+          </section>
+          <section>
+            <h3><b>02</b> Set the current</h3>
+            <label for="speed"
+              >Inlet speed <output id="speed-value"></output></label
+            ><input
+              id="speed"
+              type="range"
+              min="0.2"
+              max="8"
+              step="0.1"
+              value="2"
+            /><label for="length"
+              >Reference length <output id="length-value"></output></label
+            ><input
+              id="length"
+              type="range"
+              min="0.02"
+              max="1"
+              step="0.01"
+              value="0.2"
+            />
+            <p class="hint">
+              SI reference only; the tunnel uses normalized display units.
+            </p>
+          </section>
+          <section>
+            <h3><b>03</b> Shape the obstacle</h3>
+            <label for="shape">Obstacle</label
+            ><select id="shape">
+              <option value="sphere">Sphere</option>
+              <option value="box">Box</option>
+              <option value="stl" disabled>Uploaded STL</option>
+              <option value="none">Empty tunnel</option></select
+            ><label class="upload" for="stl-file"
+              >↑ Upload STL <span>binary or ASCII</span></label
+            ><input
+              id="stl-file"
+              type="file"
+              accept=".stl"
+              aria-label="Upload STL"
+            />
+            <p id="upload-status" role="status" class="hint">
+              Local processing · ≤12 MB · ≤60,000 triangles
+            </p>
+            <label for="size"
+              >Obstacle scale <output id="size-value"></output></label
+            ><input
+              id="size"
+              type="range"
+              min="0.15"
+              max="0.65"
+              step="0.01"
+              value="0.42"
+            />
+            <div class="rotations">
+              <label for="rx">Rotate X <output id="rx-value">0°</output></label
+              ><input
+                id="rx"
+                type="range"
+                min="-180"
+                max="180"
+                value="0"
+              /><label for="ry"
+                >Rotate Y <output id="ry-value">0°</output></label
+              ><input
+                id="ry"
+                type="range"
+                min="-180"
+                max="180"
+                value="0"
+              /><label for="rz"
+                >Rotate Z <output id="rz-value">0°</output></label
+              ><input id="rz" type="range" min="-180" max="180" value="0" />
+            </div>
+            <p class="hint" id="voxel-count"></p>
+          </section>
+        </aside>
+        <section class="panel simulation" aria-label="3D flow visualization">
+          <div class="sim-heading">
+            <strong
+              ><i></i> <span id="medium-name">Air</span>
+              <span class="muted">/ 3D flow tunnel</span></strong
+            ><span id="status">RUNNING</span>
+          </div>
+          <div class="toolbar">
+            <label
+              ><input type="checkbox" id="tracers" checked /> 3D tracers</label
+            ><label
+              ><input type="checkbox" id="slice" checked /> Velocity
+              slice</label
+            ><select id="slice-axis" aria-label="Slice axis">
+              <option value="z">XY plane · Z slice</option>
+              <option value="y">XZ plane · Y slice</option>
+              <option value="x">YZ plane · X slice</option></select
+            ><input
+              type="range"
+              id="slice-position"
+              aria-label="Slice position"
+              min="0.05"
+              max="0.95"
+              step="0.01"
+              value="0.5"
+            />
+          </div>
+          <div id="viewport">
+            <canvas
+              id="flow"
+              aria-label="Interactive three-dimensional flow. Drag to orbit; scroll or pinch to zoom."
+            ></canvas>
+            <div class="viewport-label">
+              VOLUME / 40 × 24 × 24 <span>FLOW → +X</span>
+            </div>
+            <div class="orbit-hint">
+              Drag to orbit · scroll / pinch to zoom · right-drag to pan
+            </div>
+            <div class="axis-key">
+              <span>X →</span><span>Y ↑</span><span>Z ↗</span>
+            </div>
+          </div>
+          <div class="legend">
+            <span>Normalized speed |u|</span><i></i><span>0 → 1.8</span>
+          </div>
+          <div class="playback">
+            <button id="pause" class="primary">Pause</button
+            ><button id="step" disabled>Step</button
+            ><button id="reset">Reset flow</button
+            ><button id="camera">Reset camera</button
+            ><span><b id="sim-time">0.00</b> sim s</span>
+          </div>
+          <div class="metrics">
+            <div>
+              <small>REYNOLDS NUMBER · SI</small><strong id="reynolds"></strong
+              ><span>ρUL / μ · reference only</span>
+            </div>
+            <div>
+              <small>RMS DIVERGENCE</small><strong id="divergence">—</strong
+              ><span>normalized ∇·u residual</span>
+            </div>
+            <div>
+              <small>SOLID VOXELS</small><strong id="solid-metric">—</strong
+              ><span>triangle-parity geometry</span>
+            </div>
+          </div>
+          <p class="computed">
+            ● Computed 3-component velocity + pressure · tracers follow the
+            field, not scripted paths
+          </p>
+          <p id="error" role="alert"></p>
+        </section>
+      </div>
+      <section id="model" class="model">
+        <h2>A playground, not a prediction.</h2>
+        <p>
+          A genuine 3D staggered-grid incompressible solver: semi-Lagrangian
+          velocity advection, bounded viscous diffusion and iterative pressure
+          projection. Obstacles block face fluxes in a three-dimensional voxel
+          mask. STL meshes are centered, normalized and voxelized by
+          triangle-ray parity, not their bounding box.
+        </p>
+        <p>
+          Air, water and oil use representative SI properties near 20°C, but
+          inlet speed and viscosity are compressed into educational normalized
+          display units. This is
+          <strong>not Reynolds-matched or validated engineering CFD</strong>.
+          The clock is normalized. Density affects the reported SI Reynolds
+          number, not a buoyancy force.
+        </p>
+        <details>
+          <summary>Limits & numerical model</summary>
+          <p>
+            40 × 24 × 24 cells, approximate free-slip boundaries, 28 pressure
+            Jacobi iterations per step. Fixed inlet/outlet velocity and side
+            walls; residual divergence is displayed rather than hidden.
+            Stair-step geometry, coarse resolution and numerical diffusion do
+            not resolve boundary layers or predict turbulence, drag, lift or
+            pressure loads. Features thinner than a voxel can disappear.
+            Open/non-manifold STL files are flagged: parity cannot guarantee a
+            valid interior. Rotated meshes are resampled; intersecting shells
+            and self-intersections are unsupported.
+          </p>
+          <p>
+            Water is fully submerged single-phase flow: no free surface, waves,
+            splashes, gravity, cavitation, compressibility or multiphase mixing.
+            Display viscosity = 0.000035 + 0.00032 log₁₀(1 + ν/10⁻⁶); inlet =
+            0.35 + 0.16U. Reference L changes only the SI metric. Uploads stay
+            in your browser.
+          </p>
+        </details>
+      </section>
+    </main>
+    <footer>
+      flowSim — original implementation · Three.js renderer · no engineering
+      claims
+    </footer>
+    <script type="module" src="./app.bundle.js"></script>
+  </body>
+</html>
