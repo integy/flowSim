@@ -133,8 +133,12 @@
           <div class="toolbar">
             <label
               ><input type="checkbox" id="tracers" checked /> 3D tracers</label
-            ><label
-              ><input type="checkbox" id="slice" checked /> Velocity
+            ><label for="field-mode">Color field</label><select id="field-mode" aria-describedby="legend-note">
+              <option value="speed">Speed · slow = warm</option>
+              <option value="disturbance">Inlet deviation · high = warm</option>
+              <option value="vorticity">Vorticity · high = warm</option>
+            </select><label
+              ><input type="checkbox" id="slice" checked /> Field
               slice</label
             ><select id="slice-axis" aria-label="Slice axis">
               <option value="z">XY plane · Z slice</option>
@@ -165,13 +169,16 @@
               <span>X →</span><span>Y ↑</span><span>Z ↗</span>
             </div>
           </div>
-          <div class="legend">
-            <span>Normalized speed |u|</span><i id="speed-gradient"></i><span id="legend-range">0 → 1.8+</span>
-            <span class="obstacle-key">■ Obstacle</span>
+          <div class="legend" aria-live="polite">
+            <span id="legend-title">Speed |u|</span><span id="legend-units">normalized velocity</span>
+            <span class="obstacle-key">■ Ivory = solid geometry</span>
+            <div class="color-legend"><i id="speed-gradient"></i><div class="legend-ticks"><span id="legend-low"></span><span id="legend-mid"></span><span id="legend-high"></span></div></div>
+            <span id="legend-range">0 → 1.8+</span>
+            <p id="legend-note"></p>
           </div>
           <div class="toolbar display-settings" aria-label="Display settings">
             <label for="color-max">Color scale max <output id="color-max-value">1.8</output></label>
-            <input id="color-max" type="range" min="0.2" max="4" step="0.1" value="1.8" />
+            <input id="color-max" type="range" min="0.1" max="4" step="0.1" value="1.8" />
             <label for="tracer-opacity">Tracer opacity</label><input id="tracer-opacity" type="range" min="0" max="1" step="0.05" value="0.95" />
             <label for="slice-opacity">Slice opacity</label><input id="slice-opacity" type="range" min="0" max="1" step="0.05" value="0.38" />
             <label for="obstacle-opacity">Obstacle opacity</label><input id="obstacle-opacity" type="range" min="0" max="1" step="0.05" value="1" />

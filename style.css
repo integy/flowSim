@@ -340,11 +340,19 @@ canvas {
   color: var(--muted);
 }
 .legend i {
-  width: 140px;
-  height: 9px;
+  display: block;
+  width: 100%;
+  height: 12px;
   border-radius: 4px;
-  background: linear-gradient(90deg, #438bff, #20d9ef, #f9ed81, #ff9b38);
+  background: linear-gradient(90deg, #ff3b30, #ff922b, #ffe45c, #53d769, #20d9ef, #438bff, #8b5cf6);
 }
+.color-legend { flex: 1 0 100%; min-width: 0; }
+.legend-ticks { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.legend-ticks span { flex: 1; overflow-wrap: anywhere; }
+.legend-ticks span:nth-child(2) { text-align: center; }
+.legend-ticks span:last-child { text-align: right; }
+#legend-note { flex-basis: 100%; margin: 0; line-height: 1.6; }
+#legend-title { color: #e7f1f8; margin-right: auto; }
 .obstacle-key { color: #f4eedc; }
 .display-settings { border-top: 1px solid var(--line); }
 .display-settings output { margin-left: 6px; }

@@ -80,7 +80,7 @@ test('legend uses shared speed colors, continuous slice and adjustable layer opa
  await page.goto('/');await expect.poll(()=>page.evaluate(()=>!!window.flowSim?.obstacle)).toBe(true);
  const values=await page.evaluate(()=>{
   const f=window.flowSim;
-  return { stops:[0,.6,1.2,1.8].map(s=>'#'+f.speedColor(s).getHexString()),palette:f.palette,
+  return { stops:[0,.3,.6,.9,1.2,1.5,1.8].map(s=>'#'+f.speedColor(s).getHexString()),palette:f.palette,
     coloredTrails:f.trails.material.vertexColors, slice:f.sliceMesh.isMesh,
     indices:f.sliceMesh.geometry.index.count,trail:Array.from(f.trails.geometry.attributes.color.array.slice(0,3)),particle:Array.from(f.points.geometry.attributes.color.array.slice(0,3)) };
  });

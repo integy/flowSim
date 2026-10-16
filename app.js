@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { Fluid3D } from "./fluid3d.js";
+import { DerivedField, FIELD_MODES, SPEED_PALETTE, fieldPalette, colorRGB } from "./fields.js";
 // Geometry is processed in a local worker, including normals and voxelization.
 import { MEDIA, physicalMetrics, simulationParameters } from "./physics.js";
 const $ = (id) => document.getElementById(id),
@@ -152,39 +153,54 @@ const sliceMesh = new THREE.Mesh(
 );
 scene.add(sliceMesh);
 const color = new THREE.Color();
-const palette = ["#438bff", "#20d9ef", "#f9ed81", "#ff9b38"];
-const stops = palette.map(hex => new THREE.Color(hex).getRGB({}, THREE.SRGBColorSpace));
+const palette = SPEED_PALETTE;
 const ivory = new THREE.Color("#f4eedc");
-let colorMaximum = +$("color-max").value;
-function speedColor(s) {
-  const p = Math.max(0, Math.min(1, s / colorMaximum)) * (stops.length - 1);
-  const i = Math.min(stops.length - 2, Math.floor(p)), f = p - i;
-  const a = stops[i], b = stops[i+1];
-  color.setRGB(a.r+(b.r-a.r)*f, a.g+(b.g-a.g)*f, a.b+(b.b-a.b)*f, THREE.SRGBColorSpace);
-  return color;
+const field = new DerivedField(solver);
+let fieldMode = 'speed', colorMaximum = +$("color-max").value;
+const ranges = Object.fromEntries(Object.entries(FIELD_MODES).map(([mode, config]) => [mode, config.max]));
+function mappedColor(value, mode) {
+  return color.setRGB(...colorRGB(value, colorMaximum, mode), THREE.SRGBColorSpace);
 }
-$("speed-gradient").style.background = `linear-gradient(90deg, ${palette.join(",")})`;
+// Retained public speed-only API; fieldColor follows the selected diagnostic.
+function speedColor(s) { return mappedColor(s, 'speed'); }
+function fieldColor(s) { return mappedColor(s, fieldMode); }
 function displaySettings() {
-  const max = +$("color-max").value;
+  const max = +$("color-max").value, config = FIELD_MODES[fieldMode];
   colorMaximum = max;
+  ranges[fieldMode] = max;
   $("color-max-value").textContent = max.toFixed(1);
   $("legend-range").textContent = `0 → ${max.toFixed(1)}+`;
+  $("legend-title").textContent = config.title;
+  $("legend-units").textContent = config.units;
+  $("legend-low").textContent = `0 · ${config.low}`;
+  $("legend-mid").textContent = `${(max / 2).toFixed(2)} · ${config.mid}`;
+  $("legend-high").textContent = `${max.toFixed(1)}+ · ${config.high}`;
+  $("legend-note").textContent = config.note + ' Values above the color maximum saturate (+).';
+  $("speed-gradient").style.background = `linear-gradient(90deg in srgb, ${fieldPalette(fieldMode).join(",")})`;
   points.material.opacity = +$("tracer-opacity").value;
   trails.material.opacity = +$("tracer-opacity").value * 0.8;
   sliceMesh.material.opacity = +$("slice-opacity").value;
   if (obstacle) obstacle.material.opacity = +$("obstacle-opacity").value;
 }
+$("field-mode").addEventListener('change', () => {
+  fieldMode = $("field-mode").value;
+  const config = FIELD_MODES[fieldMode], input = $("color-max");
+  input.min = config.step; input.max = config.limit; input.step = config.step;
+  input.value = ranges[fieldMode];
+  displaySettings();
+});
 for (const id of ["color-max", "tracer-opacity", "slice-opacity", "obstacle-opacity"])
   $(id).addEventListener("input", displaySettings);
 displaySettings();
 function renderField(dt) {
+  field.update(fieldMode);
   for (let i = 0; i < particleCount; i++) {
     const o = i * 3;
     let x = particles[o],
       y = particles[o + 1],
       z = particles[o + 2];
     const vel = solver.sample(x, y, z);
-    const speed = Math.hypot(...vel);
+
     if (dt) {
       x += (vel[0] * dt) / aspect;
       y += vel[1] * dt;
@@ -213,7 +229,7 @@ function renderField(dt) {
       py = (y - 0.5) * 2,
       pz = (z - 0.5) * 2;
     positions.set([px, py, pz], o);
-    const c = speedColor(speed);
+    const c = fieldColor(field.sample(x, y, z));
     colors.set([c.r, c.g, c.b], o);
     trailColors.set([c.r, c.g, c.b, c.r, c.g, c.b], i * 6);
     trailPositions.set(
@@ -245,8 +261,7 @@ function renderField(dt) {
           axis === "x" ? [p, a, b] : axis === "y" ? [a, p, b] : [a, b, p];
         const o = (i + sliceN * j) * 3;
         slicePos.set([(x - 0.5) * width, (y - 0.5) * 2, (z - 0.5) * 2], o);
-        const s = Math.hypot(...solver.sample(x, y, z)),
-          c = speedColor(s);
+        const c = fieldColor(field.sample(x, y, z));
         sliceCol.set(
           solver.isSolid(x, y, z) ? [ivory.r, ivory.g, ivory.b] : [c.r, c.g, c.b],
           o,
@@ -446,7 +461,9 @@ rebuild();
 window.flowSim = {
   get busy() { return busy; },
   get buildId() { return buildId; },
-  points, trails, sliceMesh, speedColor, palette,
+  points, trails, sliceMesh, speedColor, palette, fieldColor, field,
+  get fieldMode() { return fieldMode; },
+  get activePalette() { return fieldPalette(fieldMode); },
   solver,
   renderer,
   camera,
