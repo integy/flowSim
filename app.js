@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { Fluid3D } from "./fluid3d.js";
-import { DerivedField, FIELD_MODES, SPEED_PALETTE, fieldPalette, colorRGB } from "./fields.js";
+import { DerivedField, FIELD_MODES, SPEED_PALETTE, fieldPalette, colorRGB, computeColorRange } from "./fields.js";
 // Geometry is processed in a local worker, including normals and voxelization.
 import { MEDIA, physicalMetrics, simulationParameters } from "./physics.js";
 const $ = (id) => document.getElementById(id),
@@ -156,27 +156,44 @@ const color = new THREE.Color();
 const palette = SPEED_PALETTE;
 const ivory = new THREE.Color("#f4eedc");
 const field = new DerivedField(solver);
-let fieldMode = 'speed', colorMaximum = +$("color-max").value;
+let fieldMode = 'disturbance', colorMaximum = FIELD_MODES.disturbance.max;
+let colorRange;
 const ranges = Object.fromEntries(Object.entries(FIELD_MODES).map(([mode, config]) => [mode, config.max]));
-function mappedColor(value, mode) {
-  return color.setRGB(...colorRGB(value, colorMaximum, mode), THREE.SRGBColorSpace);
+// Retained public speed-only API uses its remembered fixed linear maximum.
+function speedColor(s) { return color.setRGB(...colorRGB(s, ranges.speed, 'speed'), THREE.SRGBColorSpace); }
+function fieldColor(s) { return color.setRGB(...colorRGB(s, colorRange, fieldMode), THREE.SRGBColorSpace); }
+const number = v => Math.abs(v) > 0 && Math.abs(v) < .001 ? v.toExponential(3) : Number(v.toPrecision(5)).toString();
+function refreshColorRange() {
+  colorRange = computeColorRange(field.values, solver, {auto:$("color-range-mode").value==='auto',
+    maximum:colorMaximum, gamma:+$("color-gamma").value, bands:$("color-bands").checked});
+  const r=colorRange, config=FIELD_MODES[fieldMode], uniform=r.uniform;
+  // Gradient positions represent scalar values, so its center is the scalar
+  // midpoint even when gamma shifts the color/band boundaries.
+  const midpoint=r.min+(r.max-r.min)*.5;
+  $("legend-title").textContent=config.title;
+  $("legend-units").textContent=config.units;
+  $("legend-range").textContent=uniform ? `Uniform fluid · ${number(r.actualMin)}` : `${r.auto?'Auto P5–P95':'Fixed'} · ${number(r.min)} → ${number(r.max)}`;
+  $("legend-low").textContent=`${number(r.min)} · ${config.low}`;
+  $("legend-mid").textContent=uniform ? 'Uniform — no invented variation' : `${number(midpoint)} · ${config.mid}`;
+  $("legend-high").textContent=`${number(r.max)} · ${config.high}`;
+  const percent=n=>r.count ? (100*n/r.count).toFixed(1) : '0.0';
+  $("legend-clipping").textContent=`Fluid min / max: ${number(r.actualMin)} / ${number(r.actualMax)} · ${r.count} cells · clipped low ${r.clippedLow} (${percent(r.clippedLow)}%) / high ${r.clippedHigh} (${percent(r.clippedHigh)}%)`;
+  $("legend-note").textContent=config.note+' '+(fieldMode==='speed' ? 'Below range stays red, including stagnant fluid. ' : '')+'Clipped tails use endpoint colors. Use inlet deviation to reveal disturbances; colors only, physics unchanged.';
+  const palette=fieldPalette(fieldMode);
+  const stops=palette.map((c,i)=>`${c} ${(i/9)**(1/r.gamma)*100}%, ${c} ${((i+1)/9)**(1/r.gamma)*100}%`).join(',');
+  $("speed-gradient").style.background=uniform ? '#'+color.setRGB(...colorRGB(r.actualMin,r,fieldMode),THREE.SRGBColorSpace).getHexString() : r.bands ? `linear-gradient(90deg, ${stops})` : `linear-gradient(90deg in srgb, ${Array.from({length:65},(_,i)=>{
+    const c=colorRGB(r.min+(r.max-r.min)*i/64,r,fieldMode);
+    return `rgb(${c.map(v=>Math.round(v*255)).join(',')})`;
+  }).join(',')})`;
 }
-// Retained public speed-only API; fieldColor follows the selected diagnostic.
-function speedColor(s) { return mappedColor(s, 'speed'); }
-function fieldColor(s) { return mappedColor(s, fieldMode); }
 function displaySettings() {
-  const max = +$("color-max").value, config = FIELD_MODES[fieldMode];
-  colorMaximum = max;
-  ranges[fieldMode] = max;
-  $("color-max-value").textContent = max.toFixed(1);
-  $("legend-range").textContent = `0 → ${max.toFixed(1)}+`;
-  $("legend-title").textContent = config.title;
-  $("legend-units").textContent = config.units;
-  $("legend-low").textContent = `0 · ${config.low}`;
-  $("legend-mid").textContent = `${(max / 2).toFixed(2)} · ${config.mid}`;
-  $("legend-high").textContent = `${max.toFixed(1)}+ · ${config.high}`;
-  $("legend-note").textContent = config.note + ' Values above the color maximum saturate (+).';
-  $("speed-gradient").style.background = `linear-gradient(90deg in srgb, ${fieldPalette(fieldMode).join(",")})`;
+  colorMaximum = +$("color-max").value;
+  ranges[fieldMode] = colorMaximum;
+  $("color-max-value").textContent = colorMaximum.toFixed(1);
+  $("color-max").disabled=$("color-range-mode").value==='auto';
+  $("color-gamma-value").textContent=`γ ${(+$("color-gamma").value).toFixed(2)} · t^γ`;
+  field.update(fieldMode);
+  refreshColorRange();
   points.material.opacity = +$("tracer-opacity").value;
   trails.material.opacity = +$("tracer-opacity").value * 0.8;
   sliceMesh.material.opacity = +$("slice-opacity").value;
@@ -189,11 +206,12 @@ $("field-mode").addEventListener('change', () => {
   input.value = ranges[fieldMode];
   displaySettings();
 });
-for (const id of ["color-max", "tracer-opacity", "slice-opacity", "obstacle-opacity"])
+for (const id of ["color-max", "color-gamma", "color-bands", "color-range-mode", "tracer-opacity", "slice-opacity", "obstacle-opacity"])
   $(id).addEventListener("input", displaySettings);
 displaySettings();
 function renderField(dt) {
   field.update(fieldMode);
+  refreshColorRange();
   for (let i = 0; i < particleCount; i++) {
     const o = i * 3;
     let x = particles[o],
@@ -463,6 +481,7 @@ window.flowSim = {
   get buildId() { return buildId; },
   points, trails, sliceMesh, speedColor, palette, fieldColor, field,
   get fieldMode() { return fieldMode; },
+  get colorRange() { return colorRange; },
   get activePalette() { return fieldPalette(fieldMode); },
   solver,
   renderer,

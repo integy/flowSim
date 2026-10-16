@@ -4,8 +4,13 @@ test('field selection recolors all layers with exact legend, units and remembere
   await page.goto('/');
   await expect.poll(()=>page.evaluate(()=>!!window.flowSim?.obstacle)).toBe(true);
   await page.locator('#pause').click();
+  // Endpoint/range regression explicitly uses the legacy fixed linear mode.
+  await page.locator('#color-range-mode').selectOption('fixed');
+  await page.locator('#color-gamma').fill('1');
+  await page.locator('#color-bands').uncheck();
+  await page.locator('#field-mode').selectOption('speed');
   await expect(page.locator('#legend-note')).toContainText('not a true blockage detector');
-  expect(await page.evaluate(()=> '#'+window.flowSim.speedColor(0).getHexString())).toBe('#ff3b30');
+  expect(await page.evaluate(()=> '#'+window.flowSim.speedColor(0).getHexString())).toBe('#b50924');
   const snapshots=[];
   for(const mode of ['speed','disturbance','vorticity']) {
     await page.locator('#field-mode').selectOption(mode);
@@ -21,9 +26,9 @@ test('field selection recolors all layers with exact legend, units and remembere
         endpoints:[f.fieldColor(0).getHexString(), f.fieldColor(100).getHexString()]};
     });
     expect(state.finite&&state.sliceFinite).toBe(true); expect(state.trail).toEqual(state.p.slice(0,3));
-    expect(state.palette).toHaveLength(7);
-    expect(state.endpoints).toEqual(mode==='speed'?['ff3b30','8b5cf6']:['8b5cf6','ff3b30']);
-    expect(state.gradient).toContain(mode==='speed'?'255, 59, 48':'139, 92, 246');
+    expect(state.palette).toHaveLength(9);
+    expect(state.endpoints).toEqual(mode==='speed'?['b50924','d75bff']:['d75bff','b50924']);
+    expect(state.gradient).toContain(mode==='speed'?'181, 9, 36':'215, 91, 255');
     const sliceError = await page.evaluate(() => {
       const f=window.flowSim, array=f.sliceMesh.geometry.attributes.color.array;
       // First slice vertex is fluid at x=y=0, z=.5; compare the actual GPU buffer
@@ -37,7 +42,7 @@ test('field selection recolors all layers with exact legend, units and remembere
     const beforeRange = state.p;
     await page.locator('#color-max').fill(mode==='vorticity'?'12':'2.5');
     await expect.poll(()=>page.evaluate(()=>Array.from(window.flowSim.points.geometry.attributes.color.array.slice(0,90)))).not.toEqual(beforeRange);
-    await expect(page.locator('#legend-high')).toContainText(mode==='vorticity'?'12.0+':'2.5+');
+    await expect(page.locator('#legend-high')).toContainText(mode==='vorticity'?'12 ·':'2.5 ·');
   }
   expect(snapshots[0]).not.toEqual(snapshots[1]); expect(snapshots[1]).not.toEqual(snapshots[2]);
   await page.locator('#field-mode').selectOption('speed');

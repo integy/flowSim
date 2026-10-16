@@ -37,8 +37,9 @@ export class DerivedField {
   }
 }
 
-// Shared display mapping; RGB interpolation is explicitly in sRGB.
-export const SPEED_PALETTE = ['#ff3b30', '#ff922b', '#ffe45c', '#53d769', '#20d9ef', '#438bff', '#8b5cf6'];
+// Nine deliberately separated sRGB stops. Speed is warm at low values;
+// deviation and curl reverse the order, not the scalar definition.
+export const SPEED_PALETTE = ['#b50924', '#ff6500', '#ffe600', '#9fff00', '#00a65a', '#00e5ff', '#0074ff', '#4020c8', '#d75bff'];
 export const FIELD_MODES = {
   speed: { title: 'Speed |u|', units: 'normalized velocity', max: 1.8, limit: 4, step: .1, low: 'Slow / stagnation', mid: 'Intermediate speed', high: 'Fast', note: 'Red / orange = slow or near-stagnant fluid, not a true blockage detector. Ivory = solid geometry, not a field value.' },
   disturbance: { title: 'Inlet deviation ‖u − Uin eₓ‖ / Uin', units: 'dimensionless', max: 1, limit: 3, step: .1, low: 'Inlet-like', mid: 'Moderate deviation', high: 'Strong deviation', note: 'Red / orange = larger velocity deviation from the uniform inlet, including slowing and deflection. Not turbulence intensity, pressure or blockage.' },
@@ -47,10 +48,50 @@ export const FIELD_MODES = {
 export function fieldPalette(mode = 'speed') {
   return mode === 'speed' ? [...SPEED_PALETTE] : [...SPEED_PALETTE].reverse();
 }
+export function normalizedColor(value, range) {
+  const v = Number.isFinite(value) ? value : range.min;
+  // No tiny artificial range / noise amplification for a truly uniform field.
+  if (range.uniform) return range.actualMax <= 1e-7 ? 0 : .5;
+  const t = Math.max(0, Math.min(1, (v-range.min)/Math.max(range.max-range.min, 1e-12)));
+  return t ** (range.gamma ?? 1);
+}
 export function colorRGB(value, maximum, mode = 'speed') {
-  const p = Math.max(0, Math.min(1, (Number.isFinite(value) ? value : 0) / Math.max(maximum, 1e-6))) * 6;
-  const i = Math.min(5, Math.floor(p)), f = p - i;
-  const palette = fieldPalette(mode);
-  const a = parseInt(palette[i].slice(1), 16), b = parseInt(palette[i + 1].slice(1), 16);
-  return [16, 8, 0].map(shift => (((a >> shift) & 255) * (1-f) + ((b >> shift) & 255) * f) / 255);
+  // Numeric maximum preserves the public fixed, continuous, linear mapping API.
+  const range = typeof maximum === 'number' ? {min:0, max:maximum, gamma:1, bands:false} : maximum;
+  let t = normalizedColor(value, range);
+  const palette = fieldPalette(mode), last = palette.length-1;
+  if (range.bands) t = Math.min(last, Math.floor(t*palette.length))/last;
+  const p=t*last, i=Math.min(last-1, Math.floor(p)), f=p-i;
+  const a=parseInt(palette[i].slice(1),16), b=parseInt(palette[i+1].slice(1),16);
+  return [16,8,0].map(shift => (((a>>shift)&255)*(1-f)+((b>>shift)&255)*f)/255);
+}
+
+// Exact robust quantiles of finite INTERIOR FLUID cells only. Ghost cells and
+// obstacle interiors never influence range, clipping counts or histogram.
+export function computeColorRange(values, solver, {auto=true, maximum=1.8, gamma=.65, bands=true} = {}) {
+  const samples=[];
+  for(let z=1;z<solver.nz-1;z++) for(let y=1;y<solver.ny-1;y++) for(let x=1;x<solver.nx-1;x++) {
+    const i=solver.idx(x,y,z), v=values[i];
+    if(!solver.solid[i] && Number.isFinite(v)) samples.push(v);
+  }
+  const sorted=Float64Array.from(samples).sort(), count=sorted.length;
+  const actualMin=count ? sorted[0] : 0, actualMax=count ? sorted[count-1] : 0;
+  const uniform=actualMax-actualMin <= 1e-7*Math.max(1,Math.abs(actualMin),Math.abs(actualMax));
+  const quantile=p=> {
+    const pos=(count-1)*p, lo=Math.floor(pos), f=pos-lo;
+    return sorted[lo]*(1-f)+sorted[Math.min(lo+1,count-1)]*f;
+  };
+  let min=auto && count ? quantile(.05) : 0, max=auto && count ? quantile(.95) : Math.max(maximum,1e-6);
+  // If the central 90% is identical but real tails vary, expose their actual
+  // extent rather than treating the whole domain as uniform or dividing by zero.
+  if(auto && max-min <= 1e-7*Math.max(1,Math.abs(max))) {min=actualMin; max=actualMax;}
+  const range={min,max,actualMin,actualMax,count,uniform:auto && uniform,auto,
+    gamma:Math.max(.1,Math.min(4,Number.isFinite(gamma)?gamma:1)),bands,
+    clippedLow:0,clippedHigh:0,histogram:Array(9).fill(0)};
+  for(const v of sorted) {
+    if(v<min) range.clippedLow++;
+    if(v>max) range.clippedHigh++;
+    range.histogram[Math.min(8,Math.floor(normalizedColor(v,range)*9))]++;
+  }
+  return range;
 }

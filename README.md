@@ -10,18 +10,26 @@ Website: https://integy.github.io/flowSim/ (deployment is separate from local de
 - Upload **binary or ASCII STL** files locally. Geometry is centered and normalized; scale and X/Y/Z rotation controls update both the rendered triangle mesh and solver's solid mask.
 - Actual triangle-ray intersections and parity determine solid voxels; this is **not a bounding-box obstacle approximation**. Upload status reports triangle count, non-manifold/open edge warnings and solid voxel count. Mesh display is smooth, while its fluid boundary is voxelized.
 - Built-in sphere, box and empty tunnel. Medium/speed/geometry changes reset the field. Pause, step, reset flow and reset camera.
-- A shared **seven-stop red → orange → yellow → green → cyan → blue → violet speed scale**: red/orange means slow or near-stagnant fluid, cool colors mean fast. This is not a true blockage detector. Particles, trails and the continuous slice share the same selected scalar mapping, range and explicit sRGB interpolation; neutral ivory always identifies solid geometry, not a scalar value. Opacities remain independent.
-- Select **speed**, **inlet deviation** or **vorticity**. Each has its own remembered color maximum, low/mid/high numerical and descriptive legend, units and saturation (`+`) labels. Deviation and vorticity use the reversed palette: high values are warm. All values are normalized, not SI flow predictions.
+- A shared **nine-color red → orange → yellow → lime → green → cyan → blue → indigo → violet speed scale**: red/orange means slow or near-stagnant fluid, cool colors mean fast. This is not a true blockage detector. Particles, trails and slice vertices share the same selected scalar mapping, range and explicit sRGB conversion; neutral ivory always identifies solid geometry, not a scalar value. Opacities remain independent. The triangulated slice interpolates vertex colors spatially.
+- Select **speed**, **inlet deviation** (default) or **vorticity**. Deviation and vorticity reverse the palette: high values are red. The default **Auto P5–P95** range and **nine distinct bands** expose subtle computed differences rather than coloring most flow alike. Switch to continuous colors when desired. Every mode remembers its fixed color maximum. All values are normalized, not SI flow predictions.
+
+### Contrast controls
+
+- **Auto range:** exact interpolated 5th/95th percentiles of finite **interior fluid cells only**, updated with the field. Solid cells and outer ghost cells never influence the range or clipping counts. Tails saturate at the endpoint colors. If both percentiles coincide but real tails vary, the actual fluid extent is used instead, avoiding a zero-width scale.
+- **Fixed range:** 0 to the selected maximum, with independent remembered maxima for each field. The maximum slider is disabled in Auto. Fixed mode is useful for comparison across time or media; auto colors are relative to the current field and should not be treated as absolute comparisons.
+- **Sensitivity:** after clamping `t = (value − min)/(max − min)` to [0,1], color position is `t^γ` (default γ = 0.65; adjustable 0.1–4). γ < 1 reveals weak deviations; γ > 1 emphasizes peaks. Set γ = 1 and disable bands for the fixed linear scale. These controls never modify velocity, pressure or physics.
+- **Numeric legend:** active min/max, scalar midpoint, actual fluid min/max, sample count and clipped low/high counts and percentages are displayed. The gradient's nonlinear band boundaries reflect gamma; ticks remain aligned to scalar positions. Below-range speed remains red, so stagnation is not hidden by percentile clipping.
+- **Uniform guard:** a fluid spread ≤ `10⁻⁷ × max(1, |min|, |max|)` is treated as uniform in Auto, with a single color and explicit “Uniform fluid” / “no invented variation” labels. Uniform zero uses the low endpoint; uniform nonzero uses the middle color. No artificial tiny range amplifies numerical noise.
 
 ### Color-field definitions
 
 `fields.js` reconstructs cell-centered 3D velocity by averaging adjacent MAC faces. It derives scalar grids once per rendered frame, then trilinearly samples the same grid for particles, trails and slice vertices.
 
-- **Speed:** `|u|`, normalized velocity; default color maximum 1.8 (adjustable 0.1–4). Red is zero speed, violet is the maximum and above.
+- **Speed:** `|u|`, normalized velocity; remembered fixed maximum defaults to 1.8 (adjustable 0.1–4). Red is at/below the active minimum, violet at/above its maximum, except the explicit uniform guard.
 - **Inlet deviation (disturbance):** `‖u − Uin eₓ‖ / max(|Uin|, 10⁻⁶)`, dimensionless; default maximum 1 (adjustable 0.1–3). Captures slowing, reversal and deflection relative to the uniform inlet. It is not temporal turbulence intensity or a blockage fraction.
 - **Vorticity:** `|curl u|`, computed with central differences of all three reconstructed velocity components and actual solver spacing `h = 1/(ny−2)`; one-sided differences at outer grid boundaries. Units are inverse normalized simulation time, not Hz or physical s⁻¹. Default maximum 8 (adjustable 0.5–40). Neighboring solid velocities participate in finite differences; near-voxel-boundary shear is a coarse-grid diagnostic, not a resolved boundary layer or turbulence prediction.
 
-Neither field is pressure, lift, drag or a true blockage measurement. Solid cells are shown in ivory in the slice. Values above the selected color maximum saturate without altering the solver.
+Neither field is pressure, lift, drag or a true blockage measurement. Solid cells are shown in ivory in the slice. Values outside the active color range saturate without altering the solver.
 - No runtime CDN, server API or node_modules dependency. The committed `app.bundle.js` includes Three.js and OrbitControls; the local `stl-worker.bundle.js` handles geometry. All URLs are relative for `/flowSim/` GitHub Pages hosting.
 
 ## Model and limitations
@@ -66,7 +74,7 @@ Playwright configuration uses local Chrome at `/Applications/Google Chrome.app/C
 - `fluid3d.js`: three-component MAC velocity solver.
 - `stl.js`: full-geometry STL reader, normalization/rotation, optional edge checks and triangle-parity voxelizer.
 - `stl-worker.js`, `stl-worker.bundle.js`: background geometry processing and generated local worker module.
-- `fields.js`: cell-centered speed, inlet deviation, 3D curl, shared seven-stop palettes and scalar interpolation.
+- `fields.js`: cell-centered speed, inlet deviation, 3D curl, robust fluid ranges, shared nine-color palettes, gamma/band mapping and scalar interpolation.
 - `app.js`: Three.js scene, 3D particle advection, slices and UI.
 - `app.bundle.js`: self-contained production module, generated by esbuild.
 - `physics.js`: SI properties and explicit normalized mappings.

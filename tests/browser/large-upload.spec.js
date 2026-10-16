@@ -12,6 +12,7 @@ test('large actual upload above 12 MiB / 60000 triangles stays interactive and r
  });
  await page.goto('/flowSim/');
  await expect.poll(()=>page.evaluate(()=>!!window.flowSim && !window.flowSim.busy)).toBe(true);
+ await page.locator('#color-range-mode').selectOption('fixed');
  const fixture=largeSTL(); expect(fixture.length).toBeGreaterThan(12*1024*1024);
  const path=testInfo.outputPath('large-tetra.stl'); await writeFile(path,fixture);
  await page.evaluate(()=>{
@@ -23,7 +24,7 @@ test('large actual upload above 12 MiB / 60000 triangles stays interactive and r
          document.getElementById('pause').click();
          document.getElementById('color-max').value='1.2';
          document.getElementById('color-max').dispatchEvent(new Event('input'));
-         window.interactedWhileBusy=document.getElementById('status').textContent==='PAUSED' && document.getElementById('legend-range').textContent==='0 → 1.2+';
+         window.interactedWhileBusy=document.getElementById('status').textContent==='PAUSED' && document.getElementById('legend-range').textContent==='Fixed · 0 → 1.2';
        }
      }
      window.monitorId=requestAnimationFrame(monitor);
@@ -78,15 +79,19 @@ test('worker load failure clears busy status and retains previous geometry',asyn
 
 test('legend uses shared speed colors, continuous slice and adjustable layer opacity',async({page})=>{
  await page.goto('/');await expect.poll(()=>page.evaluate(()=>!!window.flowSim?.obstacle)).toBe(true);
+ await page.locator('#field-mode').selectOption('speed');
+ await page.locator('#color-range-mode').selectOption('fixed');
+ await page.locator('#color-gamma').fill('1');
+ await page.locator('#color-bands').uncheck();
  const values=await page.evaluate(()=>{
   const f=window.flowSim;
-  return { stops:[0,.3,.6,.9,1.2,1.5,1.8].map(s=>'#'+f.speedColor(s).getHexString()),palette:f.palette,
+  return { stops:Array.from({length:9},(_,i)=>'#'+f.speedColor(i*1.8/8).getHexString()),palette:f.palette,
     coloredTrails:f.trails.material.vertexColors, slice:f.sliceMesh.isMesh,
     indices:f.sliceMesh.geometry.index.count,trail:Array.from(f.trails.geometry.attributes.color.array.slice(0,3)),particle:Array.from(f.points.geometry.attributes.color.array.slice(0,3)) };
  });
  expect(values.stops).toEqual(values.palette);expect(values.coloredTrails).toBe(true);expect(values.trail).toEqual(values.particle);
  expect(values.slice).toBe(true);expect(values.indices).toBe(39*39*6);
- await page.locator('#color-max').fill('2.5');await expect(page.locator('#legend-range')).toHaveText('0 → 2.5+');
+ await page.locator('#color-max').fill('2.5');await expect(page.locator('#legend-range')).toHaveText('Fixed · 0 → 2.5');
  await page.locator('#obstacle-opacity').fill('0.4');await page.locator('#slice-opacity').fill('0.7');await page.locator('#tracer-opacity').fill('0.8');
  expect(await page.evaluate(()=>[window.flowSim.obstacle.material.opacity,window.flowSim.sliceMesh.material.opacity,window.flowSim.points.material.opacity])).toEqual([.4,.7,.8]);
 });

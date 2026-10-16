@@ -351,7 +351,7 @@ canvas {
 .legend-ticks span { flex: 1; overflow-wrap: anywhere; }
 .legend-ticks span:nth-child(2) { text-align: center; }
 .legend-ticks span:last-child { text-align: right; }
-#legend-note { flex-basis: 100%; margin: 0; line-height: 1.6; }
+#legend-note, #legend-clipping { flex-basis: 100%; margin: 0; line-height: 1.6; overflow-wrap: anywhere; }
 #legend-title { color: #e7f1f8; margin-right: auto; }
 .obstacle-key { color: #f4eedc; }
 .display-settings { border-top: 1px solid var(--line); }

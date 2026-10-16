@@ -39,10 +39,10 @@ test('3D curl uses physical grid spacing and every component; solid-body rotatio
   assert.ok(Math.abs(grid.sample(.5,.5,.5)-expected)<1e-5);
 });
 
-test('seven-stop speed palette is warm at rest and cool at high speed; diagnostics reverse it', () => {
-  assert.equal(fields.SPEED_PALETTE.length, 7);
-  assert.deepEqual(fields.colorRGB(0, 1, 'speed'), [1, 59/255, 48/255]);
-  assert.deepEqual(fields.colorRGB(1, 1, 'speed'), [139/255, 92/255, 246/255]);
+test('nine-stop speed palette is warm at rest and cool at high speed; diagnostics reverse it', () => {
+  assert.equal(fields.SPEED_PALETTE.length, 9);
+  assert.deepEqual(fields.colorRGB(0, 1, 'speed'), [181/255, 9/255, 36/255]);
+  assert.deepEqual(fields.colorRGB(1, 1, 'speed'), [215/255, 91/255, 1]);
   assert.deepEqual(fields.colorRGB(0, 1, 'disturbance'), fields.colorRGB(1, 1, 'speed'));
   assert.deepEqual(fields.colorRGB(1, 1, 'vorticity'), fields.colorRGB(0, 1, 'speed'));
   assert.deepEqual(fields.colorRGB(2, 1, 'speed'), fields.colorRGB(1, 1, 'speed'));
