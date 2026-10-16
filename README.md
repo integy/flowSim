@@ -10,7 +10,8 @@ Website: https://integy.github.io/flowSim/ (deployment is separate from local de
 - Upload **binary or ASCII STL** files locally. Geometry is centered and normalized; scale and X/Y/Z rotation controls update both the rendered triangle mesh and solver's solid mask.
 - Actual triangle-ray intersections and parity determine solid voxels; this is **not a bounding-box obstacle approximation**. Upload status reports triangle count, non-manifold/open edge warnings and solid voxel count. Mesh display is smooth, while its fluid boundary is voxelized.
 - Built-in sphere, box and empty tunnel. Medium/speed/geometry changes reset the field. Pause, step, reset flow and reset camera.
-- No runtime CDN, server API or node_modules dependency. The committed `app.bundle.js` includes Three.js and OrbitControls; all URLs are relative for `/flowSim/` GitHub Pages hosting.
+- A shared high-contrast blue/cyan/yellow/orange speed scale colors particles, brighter vertex-colored trails and a continuous triangle velocity slice. Adjust the normalized color maximum independently of inlet speed; values above the maximum saturate (the legend's `+`). Tracer, slice and neutral-ivory obstacle opacity are independently adjustable. The legend uses the same palette and range; colors describe normalized speed, **not m/s**.
+- No runtime CDN, server API or node_modules dependency. The committed `app.bundle.js` includes Three.js and OrbitControls; the local `stl-worker.bundle.js` handles geometry. All URLs are relative for `/flowSim/` GitHub Pages hosting.
 
 ## Model and limitations
 
@@ -20,7 +21,11 @@ This is **educational normalized single-phase flow**, not validated engineering 
 
 SI metrics use representative properties near 20 °C and `Re = ρUL/μ`. Reference length L changes this metric only. Density does not create buoyancy. The display solver uses `inlet = 0.35 + 0.16U` and `ν_display = 0.000035 + 0.00032 log10(1 + ν_SI / 10⁻⁶)`; viscosity ordering is retained but **Reynolds similarity is not**. These are not SI solver speeds or viscosities.
 
-STL limits: **12 MiB and 60,000 triangles**. Binary size must match its declared triangle count. Coordinates must be finite and have nonzero extent. Open/non-manifold edge detection uses rounded welded positions; warnings are not a proof of watertightness. Closed, non-self-intersecting manifold meshes work best. Scanline parity handles triangle surfaces and shared-hit deduplication, but self-intersections, nested overlapping shells and unresolved features can yield invalid interiors. Details thinner than a voxel can disappear. Uploads never leave the browser. Large meshes may briefly block the UI while voxelizing.
+STL uploads have **no fixed byte-size or triangle-count rejection**. Every triangle is retained for rendering and parity voxelization: there is no silent truncation, decimation or bounding-box replacement. Binary size must match its declared triangle count. Coordinates must be finite and have nonzero extent; missing/incomplete triangles remain invalid. Above 60,000 triangles, only the optional memory-intensive open/non-manifold edge diagnostic is skipped, with an explicit **watertightness unknown** warning. Smaller meshes use rounded welded edge positions; even a closed-edge result is not proof of watertightness.
+
+Reading/parsing, transforms, face normals and voxelization run in a Web Worker. Geometry changes are debounced; superseded workers are terminated and stale responses ignored. The previous obstacle and flow remain usable until the new full mesh and mask are ready; status text and `aria-busy` expose background work. Failures retain the previous obstacle. Changing the selected shape cancels pending uploads. **Browser RAM, typed-array allocation and GPU limits still apply**: very large files can exhaust memory or take a long time, and final GPU upload/rendering still occurs on the main thread. This is not unlimited-capacity processing.
+
+Closed, non-self-intersecting manifold meshes work best. Scanline parity handles triangle surfaces and shared-hit deduplication, but self-intersections, nested overlapping shells and unresolved features can yield invalid interiors. Details thinner than a voxel can disappear. The fluid boundary is still limited by the 40 × 24 × 24 grid, independently of retained mesh detail. Uploads never leave the browser.
 
 ## Run and build
 
@@ -34,7 +39,7 @@ npm ci
 npm run build
 ```
 
-Commit the rebuilt `app.bundle.js` alongside source changes. GitHub Pages can serve the repository root as static files; no deployment build is required. Do not open via file://.
+Commit both rebuilt `app.bundle.js` and `stl-worker.bundle.js` alongside source changes. GitHub Pages can serve the repository root as static files; no deployment build is required. Do not open via file://. Workers require HTTP(S); the worker URL resolves beside the app bundle, including under `/flowSim/`.
 
 ## Verification
 
@@ -43,12 +48,13 @@ npm test
 npm run test:browser
 ```
 
-Playwright configuration uses local Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`; adapt `playwright.config.js` for another OS. Numerical tests cover 3D stability, projection reduction, impermeable face constraints, all medium mappings, actual binary/ASCII STL parsing and a tetrahedral voxel volume smaller than its bounding box. Browser tests exercise real WebGL rendering, actual file upload, voxel-changing rotations, all three media, slice orientations, camera orbit, playback controls and a 390px mobile layout. Screenshots are written under ignored `test-results/`. Tests are implementation checks, not experimental CFD validation.
+Playwright configuration uses local Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`; adapt `playwright.config.js` for another OS. Numerical tests cover 3D stability, projection reduction, impermeable face constraints, all medium mappings, actual binary/ASCII STL parsing and a tetrahedral voxel volume smaller than its bounding box. A generated closed subdivided tetrahedron has **262,144 distinct triangles and exceeds 12 MiB**: tests verify full parsing, actual file upload in Chrome, exact rendered triangle count, a non-box voxel interior, frame callbacks and working controls during processing, rotation rebuild and cancellation/latest-request behavior. ASCII parsing above 60,000 triangles is also tested. Browser tests additionally exercise shared palette endpoints, matching particle/trail colors, continuous slices and opacity controls, all three media, camera orbit, playback controls and a 390px mobile layout. Both root and `/flowSim/` worker resolution are tested. Screenshots are written under ignored `test-results/`. Tests are implementation checks, not experimental CFD validation.
 
 ## Source
 
 - `fluid3d.js`: three-component MAC velocity solver.
-- `stl.js`: bounded STL reader, normalization/rotation, edge checks and triangle-parity voxelizer.
+- `stl.js`: full-geometry STL reader, normalization/rotation, optional edge checks and triangle-parity voxelizer.
+- `stl-worker.js`, `stl-worker.bundle.js`: background geometry processing and generated local worker module.
 - `app.js`: Three.js scene, 3D particle advection, slices and UI.
 - `app.bundle.js`: self-contained production module, generated by esbuild.
 - `physics.js`: SI properties and explicit normalized mappings.

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild app.js --bundle --format=esm --minify --outfile=app.bundle.js",
+    "build": "esbuild app.js --bundle --format=esm --minify --outfile=app.bundle.js && esbuild stl-worker.js --bundle --format=esm --minify --outfile=stl-worker.bundle.js",
     "test": "node --test tests/*.test.js",
     "test:browser": "playwright test",
     "serve": "python3 -m http.server 8080"

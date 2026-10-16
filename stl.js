@@ -1,12 +1,10 @@
-export const MAX_BYTES = 12 * 1024 * 1024,
-  MAX_TRIANGLES = 60000;
+// Only the optional topology diagnostic is bounded, never mesh geometry.
+export const TOPOLOGY_TRIANGLES = 60000;
 export function parseSTL(buffer) {
-  if (buffer.byteLength > MAX_BYTES) throw Error("STL exceeds 12 MB limit.");
   let values = [];
   const view = new DataView(buffer);
   const count = buffer.byteLength >= 84 ? view.getUint32(80, true) : 0;
   if (count > 0 && 84 + count * 50 === buffer.byteLength) {
-    if (count > MAX_TRIANGLES) throw Error("STL exceeds 60,000 triangles.");
     values = new Float32Array(count * 9);
     for (let i = 0; i < count; i++)
       for (let j = 0; j < 9; j++)
@@ -20,8 +18,6 @@ export function parseSTL(buffer) {
     );
     for (const m of matches) {
       values.push(Number(m[1]), Number(m[2]), Number(m[3]));
-      if (values.length > MAX_TRIANGLES * 9)
-        throw Error("STL exceeds 60,000 triangles.");
     }
     if (!values.length || values.length % 9)
       throw Error("STL has incomplete or missing triangles.");
@@ -39,6 +35,8 @@ export function parseSTL(buffer) {
   });
   const extent = Math.max(...bounds[1].map((v, i) => v - bounds[0][i]));
   if (extent < 1e-12) throw Error("STL has zero extent.");
+  if (values.length / 9 > TOPOLOGY_TRIANGLES)
+    return { triangles: values, openEdges: null, bounds };
   const edges = new Map(),
     key = (i) =>
       [0, 1, 2]

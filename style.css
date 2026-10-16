@@ -331,6 +331,7 @@ canvas {
 }
 .legend {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
@@ -340,10 +341,14 @@ canvas {
 }
 .legend i {
   width: 140px;
-  height: 5px;
+  height: 9px;
   border-radius: 4px;
-  background: linear-gradient(90deg, #246bba, #57dfd3, #f5bc6c);
+  background: linear-gradient(90deg, #438bff, #20d9ef, #f9ed81, #ff9b38);
 }
+.obstacle-key { color: #f4eedc; }
+.display-settings { border-top: 1px solid var(--line); }
+.display-settings output { margin-left: 6px; }
+[aria-busy="true"] { color: #f9ed81; }
 .playback {
   padding: 15px 20px;
   display: flex;

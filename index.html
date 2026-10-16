@@ -88,7 +88,7 @@
               aria-label="Upload STL"
             />
             <p id="upload-status" role="status" class="hint">
-              Local processing · ≤12 MB · ≤60,000 triangles
+              Local processing · no fixed file/triangle cap · browser memory applies
             </p>
             <label for="size"
               >Obstacle scale <output id="size-value"></output></label
@@ -166,7 +166,15 @@
             </div>
           </div>
           <div class="legend">
-            <span>Normalized speed |u|</span><i></i><span>0 → 1.8</span>
+            <span>Normalized speed |u|</span><i id="speed-gradient"></i><span id="legend-range">0 → 1.8+</span>
+            <span class="obstacle-key">■ Obstacle</span>
+          </div>
+          <div class="toolbar display-settings" aria-label="Display settings">
+            <label for="color-max">Color scale max <output id="color-max-value">1.8</output></label>
+            <input id="color-max" type="range" min="0.2" max="4" step="0.1" value="1.8" />
+            <label for="tracer-opacity">Tracer opacity</label><input id="tracer-opacity" type="range" min="0" max="1" step="0.05" value="0.95" />
+            <label for="slice-opacity">Slice opacity</label><input id="slice-opacity" type="range" min="0" max="1" step="0.05" value="0.38" />
+            <label for="obstacle-opacity">Obstacle opacity</label><input id="obstacle-opacity" type="range" min="0" max="1" step="0.05" value="1" />
           </div>
           <div class="playback">
             <button id="pause" class="primary">Pause</button
@@ -222,7 +230,10 @@
             Stair-step geometry, coarse resolution and numerical diffusion do
             not resolve boundary layers or predict turbulence, drag, lift or
             pressure loads. Features thinner than a voxel can disappear.
-            Open/non-manifold STL files are flagged: parity cannot guarantee a
+            Open/non-manifold STL files are flagged when checked; above 60,000
+            triangles the optional topology check is skipped with a warning.
+            No fixed upload size/triangle cap; browser RAM and GPU limits apply.
+            Full-mesh processing runs in a background worker. Parity cannot guarantee a
             valid interior. Rotated meshes are resampled; intersecting shells
             and self-intersections are unsupported.
           </p>

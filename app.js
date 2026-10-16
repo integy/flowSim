@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { Fluid3D } from "./fluid3d.js";
-import { parseSTL, transformTriangles, voxelize, MAX_BYTES } from "./stl.js";
+// Geometry is processed in a local worker, including normals and voxelization.
 import { MEDIA, physicalMetrics, simulationParameters } from "./physics.js";
 const $ = (id) => document.getElementById(id),
   solver = new Fluid3D(),
@@ -14,8 +14,7 @@ let medium = "air",
   last = 0,
   frames = 0;
 const scene = new THREE.Scene();
-scene.background = new THREE.Color("#07111d");
-scene.fog = new THREE.FogExp2("#07111d", 0.035);
+scene.background = new THREE.Color("#030812");
 const camera = new THREE.PerspectiveCamera(42, 1, 0.05, 100);
 const renderer = new THREE.WebGLRenderer({
   canvas: $("flow"),
@@ -92,20 +91,24 @@ const points = new THREE.Points(
     size: 0.023,
     vertexColors: true,
     transparent: true,
-    opacity: 0.8,
+    opacity: 0.95,
+    toneMapped: false,
     depthWrite: false,
   }),
 );
 scene.add(points);
 const trailPositions = new Float32Array(particleCount * 6),
+  trailColors = new Float32Array(particleCount * 6),
   tg = new THREE.BufferGeometry();
 tg.setAttribute("position", new THREE.BufferAttribute(trailPositions, 3));
+tg.setAttribute("color", new THREE.BufferAttribute(trailColors, 3));
 const trails = new THREE.LineSegments(
   tg,
   new THREE.LineBasicMaterial({
-    color: "#5ecdc6",
+    vertexColors: true,
     transparent: true,
-    opacity: 0.16,
+    opacity: 0.7,
+    toneMapped: false,
     depthWrite: false,
   }),
 );
@@ -129,26 +132,51 @@ const sliceGeo = new THREE.BufferGeometry(),
   sliceCol = new Float32Array(sliceN * sliceN * 3);
 sliceGeo.setAttribute("position", new THREE.BufferAttribute(slicePos, 3));
 sliceGeo.setAttribute("color", new THREE.BufferAttribute(sliceCol, 3));
-const sliceMesh = new THREE.Points(
+const sliceIndices = [];
+for (let j = 0; j < sliceN - 1; j++)
+  for (let i = 0; i < sliceN - 1; i++) {
+    const a = i + j * sliceN;
+    sliceIndices.push(a, a + 1, a + sliceN, a + 1, a + sliceN + 1, a + sliceN);
+  }
+sliceGeo.setIndex(sliceIndices);
+const sliceMesh = new THREE.Mesh(
   sliceGeo,
-  new THREE.PointsMaterial({
-    size: 0.055,
+  new THREE.MeshBasicMaterial({
+    side: THREE.DoubleSide,
     vertexColors: true,
     transparent: true,
-    opacity: 0.53,
+    opacity: 0.38,
+    toneMapped: false,
     depthWrite: false,
   }),
 );
 scene.add(sliceMesh);
 const color = new THREE.Color();
+const palette = ["#438bff", "#20d9ef", "#f9ed81", "#ff9b38"];
+const stops = palette.map(hex => new THREE.Color(hex).getRGB({}, THREE.SRGBColorSpace));
+const ivory = new THREE.Color("#f4eedc");
+let colorMaximum = +$("color-max").value;
 function speedColor(s) {
-  color.setHSL(
-    0.61 - Math.min(1, s / 1.8) * 0.52,
-    0.76,
-    0.4 + Math.min(1, s / 1.8) * 0.22,
-  );
+  const p = Math.max(0, Math.min(1, s / colorMaximum)) * (stops.length - 1);
+  const i = Math.min(stops.length - 2, Math.floor(p)), f = p - i;
+  const a = stops[i], b = stops[i+1];
+  color.setRGB(a.r+(b.r-a.r)*f, a.g+(b.g-a.g)*f, a.b+(b.b-a.b)*f, THREE.SRGBColorSpace);
   return color;
 }
+$("speed-gradient").style.background = `linear-gradient(90deg, ${palette.join(",")})`;
+function displaySettings() {
+  const max = +$("color-max").value;
+  colorMaximum = max;
+  $("color-max-value").textContent = max.toFixed(1);
+  $("legend-range").textContent = `0 → ${max.toFixed(1)}+`;
+  points.material.opacity = +$("tracer-opacity").value;
+  trails.material.opacity = +$("tracer-opacity").value * 0.8;
+  sliceMesh.material.opacity = +$("slice-opacity").value;
+  if (obstacle) obstacle.material.opacity = +$("obstacle-opacity").value;
+}
+for (const id of ["color-max", "tracer-opacity", "slice-opacity", "obstacle-opacity"])
+  $(id).addEventListener("input", displaySettings);
+displaySettings();
 function renderField(dt) {
   for (let i = 0; i < particleCount; i++) {
     const o = i * 3;
@@ -187,6 +215,7 @@ function renderField(dt) {
     positions.set([px, py, pz], o);
     const c = speedColor(speed);
     colors.set([c.r, c.g, c.b], o);
+    trailColors.set([c.r, c.g, c.b, c.r, c.g, c.b], i * 6);
     trailPositions.set(
       [
         px - vel[0] * 0.065,
@@ -202,6 +231,7 @@ function renderField(dt) {
   pg.attributes.position.needsUpdate = true;
   pg.attributes.color.needsUpdate = true;
   tg.attributes.position.needsUpdate = true;
+  tg.attributes.color.needsUpdate = true;
   points.visible = trails.visible = $("tracers").checked;
   sliceMesh.visible = $("slice").checked;
   if (sliceMesh.visible) {
@@ -209,8 +239,8 @@ function renderField(dt) {
       p = +$("slice-position").value;
     for (let j = 0; j < sliceN; j++)
       for (let i = 0; i < sliceN; i++) {
-        const a = (i + 0.5) / sliceN,
-          b = (j + 0.5) / sliceN;
+        const a = i / (sliceN - 1),
+          b = j / (sliceN - 1);
         const [x, y, z] =
           axis === "x" ? [p, a, b] : axis === "y" ? [a, p, b] : [a, b, p];
         const o = (i + sliceN * j) * 3;
@@ -218,7 +248,7 @@ function renderField(dt) {
         const s = Math.hypot(...solver.sample(x, y, z)),
           c = speedColor(s);
         sliceCol.set(
-          solver.isSolid(x, y, z) ? [0.03, 0.05, 0.07] : [c.r, c.g, c.b],
+          solver.isSolid(x, y, z) ? [ivory.r, ivory.g, ivory.b] : [c.r, c.g, c.b],
           o,
         );
       }
@@ -244,52 +274,86 @@ const sphereGeo = new THREE.SphereGeometry(1, 24, 16),
   };
 sphereGeo.dispose();
 boxGeo.dispose();
+let geometryWorker = null, buildId = 0, busy = false, pendingFile = null;
+function cancelBuild() {
+  buildId++;
+  geometryWorker?.terminate();
+  geometryWorker = null;
+}
+function setBusy(value) {
+  busy = value;
+  $("voxel-count").setAttribute("aria-busy", String(value));
+  $("upload-status").setAttribute("aria-busy", String(value));
+}
+function meshStatus() {
+  if (!uploaded) return;
+  $("upload-status").textContent = `${uploaded.name} · ${uploaded.triangles.length / 9} triangles · ${uploaded.openEdges === null ? "WARNING: topology check skipped for large mesh; watertightness unknown. Full geometry voxelized." : uploaded.openEdges ? `WARNING: ${uploaded.openEdges} open / non-manifold edges; interior may be invalid.` : "Closed mesh · voxelized"}`;
+}
 function rebuild() {
-  const shape = $("shape").value;
-  let triangles = shape === "stl" ? uploaded?.triangles : builtins[shape];
-  if (obstacle) {
-    scene.remove(obstacle);
-    obstacle.geometry.dispose();
-    obstacle.material.dispose();
-    obstacle = null;
-  }
-  solver.solid.fill(0);
-  if (triangles) {
-    const t = transformTriangles(triangles, {
-      scale: +$("size").value,
-      rx: (+$("rx").value * Math.PI) / 180,
-      ry: (+$("ry").value * Math.PI) / 180,
-      rz: (+$("rz").value * Math.PI) / 180,
-      aspect,
-    });
-    solver.solid = voxelize(t, solver.nx, solver.ny, solver.nz);
-    const vertices = new Float32Array(t.length);
-    for (let i = 0; i < t.length; i += 3) {
-      vertices[i] = (t[i] - 0.5) * width;
-      vertices[i + 1] = (t[i + 1] - 0.5) * 2;
-      vertices[i + 2] = (t[i + 2] - 0.5) * 2;
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
-    g.computeVertexNormals();
-    obstacle = new THREE.Mesh(
-      g,
-      new THREE.MeshStandardMaterial({
-        color: "#b7cedb",
-        metalness: 0.35,
-        roughness: 0.3,
-        side: THREE.DoubleSide,
-      }),
-    );
-    scene.add(obstacle);
-  }
-  solver.solidCount = solver.solid.reduce((a, b) => a + b, 0);
-  $("voxel-count").textContent =
-    `${solver.solidCount.toLocaleString()} solid voxels · ${triangles ? triangles.length / 9 : 0} triangles${triangles && !solver.solidCount ? " · Too small for this grid!" : ""}`;
-  $("solid-metric").textContent = solver.solidCount.toLocaleString();
-  solver.reset();
-  reseed();
-  metrics();
+  cancelBuild();
+  const id = buildId, file = pendingFile;
+  const shape = file ? "stl" : $("shape").value;
+  const triangles = shape === "stl" ? uploaded?.triangles : builtins[shape];
+  setBusy(true);
+  $("voxel-count").textContent = "Rebuilding geometry in background… previous obstacle remains active.";
+  $("upload-status").textContent = file ? "Reading STL in background…" : "Transforming and voxelizing in background…";
+  const fail = (message) => {
+    if (id !== buildId) return;
+    geometryWorker?.terminate();
+    geometryWorker = null;
+    pendingFile = null;
+    setBusy(false);
+    $("upload-status").textContent = (file ? "Upload rejected: " : "Geometry rebuild failed: ") + message;
+    $("voxel-count").textContent = `${solver.solidCount.toLocaleString()} solid voxels · previous geometry retained`;
+  };
+  try {
+    geometryWorker = new Worker(new URL("./stl-worker.bundle.js", import.meta.url), { type: "module" });
+    geometryWorker.onerror = (event) => { event.preventDefault(); fail(event.message || "Worker unavailable; try a smaller mesh or another browser."); };
+    geometryWorker.onmessageerror = () => fail("Could not receive geometry from the worker; browser memory may be exhausted.");
+    geometryWorker.onmessage = ({ data }) => {
+      if (data.id !== buildId) return;
+      if (data.error) return fail(data.error);
+      if (data.phase) { $("upload-status").textContent = data.phase; return; }
+      const { vertices, normals, solid, mesh } = data;
+      if (obstacle) {
+        scene.remove(obstacle);
+        obstacle.geometry.dispose();
+        obstacle.material.dispose();
+        obstacle = null;
+      }
+      if (vertices.length) {
+        const g = new THREE.BufferGeometry();
+        g.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
+        g.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
+        obstacle = new THREE.Mesh(g, new THREE.MeshStandardMaterial({
+          color: "#f4eedc", metalness: 0, roughness: 0.8,
+          side: THREE.DoubleSide, transparent: true,
+          opacity: +$("obstacle-opacity").value,
+        }));
+        scene.add(obstacle);
+      }
+      if (mesh) {
+        uploaded = { ...mesh, name: file.name };
+        pendingFile = null;
+        $("shape").querySelector("[value=stl]").disabled = false;
+        $("shape").value = "stl";
+      }
+      solver.solid = solid;
+      solver.solidCount = solid.reduce((a, b) => a + b, 0);
+      $("voxel-count").textContent = `${solver.solidCount.toLocaleString()} solid voxels · ${vertices.length / 9} triangles${vertices.length && !solver.solidCount ? " · Too small for this grid!" : ""}`;
+      $("solid-metric").textContent = solver.solidCount.toLocaleString();
+      geometryWorker.terminate();
+      geometryWorker = null;
+      setBusy(false);
+      if (uploaded) meshStatus();
+      else $("upload-status").textContent = "Local processing · no fixed file/triangle cap · browser memory applies";
+      solver.reset(); reseed(); metrics();
+    };
+    geometryWorker.postMessage({ id, file, triangles: file ? null : triangles,
+      options: { scale: +$("size").value, rx: +$("rx").value * Math.PI / 180,
+        ry: +$("ry").value * Math.PI / 180, rz: +$("rz").value * Math.PI / 180, aspect },
+      nx: solver.nx, ny: solver.ny, nz: solver.nz, width });
+  } catch (error) { fail(error.message); }
 }
 function metrics() {
   const speed = +$("speed").value,
@@ -328,33 +392,26 @@ $("length").oninput = metrics;
 let debounce;
 for (const id of ["shape", "size", "rx", "ry", "rz"]) {
   $(id).addEventListener("input", () => {
+    if (id === "shape") pendingFile = null;
+    cancelBuild();
     metrics();
     clearTimeout(debounce);
     debounce = setTimeout(rebuild, 120);
   });
   $(id).addEventListener("change", () => {
+    if (id === "shape") pendingFile = null;
     clearTimeout(debounce);
     rebuild();
   });
 }
-$("stl-file").onchange = async (e) => {
+$("stl-file").onchange = (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  const old = uploaded;
-  try {
-    if (file.size > MAX_BYTES) throw Error("STL exceeds 12 MB limit.");
-    $("upload-status").textContent = "Reading and voxelizing…";
-    uploaded = parseSTL(await file.arrayBuffer());
-    $("shape").querySelector("[value=stl]").disabled = false;
-    $("shape").value = "stl";
-    for (const id of ["rx", "ry", "rz"]) $(id).value = 0;
-    rebuild();
-    $("upload-status").textContent =
-      `${file.name} · ${uploaded.triangles.length / 9} triangles · ${uploaded.openEdges ? `WARNING: ${uploaded.openEdges} open / non-manifold edges; interior may be invalid.` : "Closed mesh · voxelized"}`;
-  } catch (err) {
-    uploaded = old;
-    $("upload-status").textContent = "Upload rejected: " + err.message;
-  }
+  clearTimeout(debounce);
+  pendingFile = file;
+  for (const id of ["rx", "ry", "rz"]) $(id).value = 0;
+  metrics();
+  rebuild();
 };
 $("pause").onclick = () => {
   paused = !paused;
@@ -387,6 +444,9 @@ new ResizeObserver(resize).observe($("viewport"));
 resize();
 rebuild();
 window.flowSim = {
+  get busy() { return busy; },
+  get buildId() { return buildId; },
+  points, trails, sliceMesh, speedColor, palette,
   solver,
   renderer,
   camera,
